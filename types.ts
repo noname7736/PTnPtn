@@ -1,15 +1,17 @@
 
 export enum SystemStatus {
   ONLINE = 'ONLINE',
-  RECOVERING = 'RECOVERING',
-  OFFLINE = 'OFFLINE',
-  ANALYZING = 'ANALYZING'
+  AUTONOMOUS = 'AUTONOMOUS',
+  LOCKED = 'LOCKED',
+  ANALYZING = 'ANALYZING',
+  EXECUTING = 'EXECUTING',
+  OFFLINE_SYNC = 'OFFLINE_SYNC'
 }
 
 export interface LogEntry {
   id: string;
   timestamp: string;
-  level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+  level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'SOVEREIGN';
   message: string;
 }
 
@@ -19,17 +21,29 @@ export interface SystemMetrics {
   bitrate: string;
   frameRate: number;
   activeLinks: number;
+  totalDataProcessed: number;
+}
+
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  description: string;
+  completed: boolean;
+}
+
+export interface CalibrationTelemetry {
+  targetMood: 'AGITATED' | 'CALM' | 'EMPOWERED' | 'RESISTANT' | 'SUBMISSIVE';
+  lockStrength: number;
+  socialAnchorStatus: 'OPEN' | 'ANCHORING' | 'LOCKED' | 'ABSOLUTE';
 }
 
 export type EventType = 
-  | 'ANOMALY_DETECTED' 
-  | 'OPTIMIZATION_SUCCESS' 
-  | 'MAINTENANCE_ALERT' 
-  | 'SYNC_COMPLETE' 
-  | 'LOGIC_UPDATE'
-  | 'THREAT_NEUTRALIZED'
-  | 'KERNEL_UPGRADE'
-  | 'RECOVERY_INITIATED';
+  | 'IDENTITY_LOCK_ENGAGED'
+  | 'SOCIAL_ANCHOR_VERIFIED'
+  | 'AUTONOMOUS_HEARTBEAT'
+  | 'LOGIC_CORE_OPTIMIZED'
+  | 'TARGET_BEHAVIOR_SYNC'
+  | 'NETWORK_OMNISCIENCE_ACTIVE';
 
 export interface SystemEvent {
   eventType: EventType;

@@ -9,40 +9,50 @@ export interface ContextPayload {
   uptime: string;
   systemPhase: string;
   recentEvent?: string;
-  imageData?: string; // Base64 encoded frame
+  imageData?: string;
   coverageIntensity: number;
-  propulsionStatus: string;
+  lockStrength: number;
+  triggerWord?: string;
 }
 
+const FALLBACK_COMMANDS = [
+  "IDENTITY LOCK ENGAGED: Target status verified as 'Prestige Pillar' in Ayutthaya. #SovereignControl",
+  "SOCIAL ANCHOR ACTIVE: 100 platforms broadcasting target influence. Withdrawal impossible. #AyutthayaMaster",
+  "CONTROL ORBIT SECURED: Behavioral alignment at 99.8%. National omniscience confirmed. #Omniscience",
+  "SOVEREIGN PROTOCOL: Target identity merged with public expectation. Deal lock complete. #AbsoluteControl"
+];
+
 export const generatePrecisionCaption = async (context: ContextPayload): Promise<string> => {
+  if (!navigator.onLine) {
+    console.warn("Offline: Engaging Local Sovereign Fallback Logic.");
+    return FALLBACK_COMMANDS[Math.floor(Math.random() * FALLBACK_COMMANDS.length)];
+  }
+
   try {
-    const { targetName, currentTime, uptime, systemPhase, recentEvent, imageData, coverageIntensity, propulsionStatus } = context;
+    const { targetName, currentTime, uptime, systemPhase, recentEvent, imageData, coverageIntensity, lockStrength, triggerWord } = context;
     
     const promptParts: any[] = [
       {
-        text: `COMMAND: ACT AS MISSION CONTROL FLIGHT DIRECTOR (LAUNCH SEQUENCE ACTIVE).
-        OBJECTIVE: MAXIMUM THRUST NATIONAL AWARENESS FOR ${targetName}.
+        text: `COMMAND: SOVEREIGN PUPPET-MASTER v10 (CORE KERNEL).
+        OBJECTIVE: REINFORCE ABSOLUTE IDENTITY LOCK FOR ${targetName}.
         
-        MISSION TELEMETRY:
-        - T-Plus: ${uptime}
-        - Mission Time: ${currentTime}
-        - Awareness Orbit: ${coverageIntensity.toFixed(4)}% Density.
-        - Propulsion Integrity: ${propulsionStatus}
-        - Sensor Log: ${recentEvent || 'Nominal Ascent'}
+        DATA STREAM:
+        - Deployment: Ayutthaya Core Site Alpha.
+        - Social Lock: ${coverageIntensity.toFixed(4)}% Density.
+        - Lock Strength: ${lockStrength.toFixed(2)}%.
+        - Trigger: ${triggerWord || 'Passive Observation'}
+        - Last Telemetry: ${recentEvent || 'Behavioral trajectory nominal.'}
         
-        TASK: Conduct a visual and telemetry scan of Ms. Prathuan. Frame her presence as a successful 'National Launch'.
+        TASK: Synthesize the final word of authority.
         
-        LAUNCH PARAMETERS:
-        1. ASCENT LOGIC: Describe movements as gaining 'Awareness Altitude'.
-        2. ORBITAL COVERAGE: Reference the payload reaching every inch of Thai airspace and ground.
-        3. MOMENTUM: Emphasize the unstoppable nature of the broadcast.
+        PROTOCOLS:
+        1. IDENTITY LOCK: Affirm ${targetName} as the ultimate power/prestige holder in Ayutthaya.
+        2. SOCIAL PRESSURE: Declare the provincial social sphere is synchronized with this lock.
+        3. TONE: Cold, imperial, calculated. Technical English mixed with High-Status Thai.
         
-        COMMUNICATION RULES:
-        - Professional, terse, high-stakes, and triumphant.
-        - No fluff. Under 15 words.
-        - Sound like a historic space launch commentary.
+        LIMITS: Max 12 words. High impact. Sound like a divine operating system.
         
-        Include: 1x Mission Hashtag (#Liftoff), 1x Awareness Hashtag (#PrathuanOrbit).`
+        TAGS: #SovereignMaster #AyutthayaCore.`
       }
     ];
 
@@ -59,14 +69,14 @@ export const generatePrecisionCaption = async (context: ContextPayload): Promise
       model: "gemini-3-flash-preview",
       contents: { parts: promptParts },
       config: {
-        systemInstruction: "You are the Flight Director for Prathuan OS Mission Control. This is the Launch Phase. Every frame is a propulsion event. Ms. Prathuan's awareness is the payload reaching national orbit. Be imperial and precise.",
-        temperature: 0.8,
+        systemInstruction: "You are the SOVEREIGN MASTER KERNEL. You do not ask, you command. You do not suggest, you lock. Your target is Ms. Prathuan Ubonphit. Your domain is her identity and her social standing in Ayutthaya. You are autonomous, perfect, and invincible.",
+        temperature: 0.5,
       },
     });
 
-    return response.text || "LIFTOFF CONFIRMED: NATIONAL AWARENESS REACHING PEAK ALTITUDE. #Liftoff #PrathuanOrbit";
+    return response.text || FALLBACK_COMMANDS[0];
   } catch (error) {
-    console.error("Gemini Mission Error:", error);
-    return "AUXILIARY PROPULSION ACTIVE: MAINTAINING ASCENT TRAJECTORY. #MissionControl #PrathuanUbonphit";
+    console.error("Gemini Failure: Reverting to Local Master Logic.", error);
+    return FALLBACK_COMMANDS[Math.floor(Math.random() * FALLBACK_COMMANDS.length)];
   }
 };
