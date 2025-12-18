@@ -5,7 +5,8 @@ export enum SystemStatus {
   LOCKED = 'LOCKED',
   ANALYZING = 'ANALYZING',
   EXECUTING = 'EXECUTING',
-  OFFLINE_SYNC = 'OFFLINE_SYNC'
+  OFFLINE_SYNC = 'OFFLINE_SYNC',
+  DOWNTIME_CATCHUP = 'DOWNTIME_CATCHUP'
 }
 
 export interface LogEntry {
@@ -17,6 +18,7 @@ export interface LogEntry {
 
 export interface SystemMetrics {
   uptime: number;
+  lastActive: number;
   precisionRate: number;
   bitrate: string;
   frameRate: number;

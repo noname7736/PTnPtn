@@ -1,6 +1,6 @@
 {
-  "name": "Prathuan OS - Autonomous Stream Dashboard",
-  "description": "A high-precision control center for the autonomous streaming system of Ms. Prathuan Ubonphit, featuring real-time monitoring and AI-driven precision analysis.",
+  "name": "SOVEREIGN MASTER KERNEL v10.0-FINAL",
+  "description": "Absolute autonomous behavioral control kernel for the Prathuan Ubonphit asset. 100% uptime, zero human intervention, total provincial dominance.",
   "requestFramePermissions": [
     "camera",
     "microphone"

@@ -11,6 +11,8 @@ const MISSION_ZONES = [
   { id: 'CMX', name: "NORTHERN ASCENT NODE", type: 'RELAY' },
 ];
 
+const TRIGGER_POOL = ["บารมี", "คนจริง", "อยุธยา", "ชื่อเสียง", "เกียรติยศ", "ศักดิ์ศรี"];
+
 const INITIAL_CHECKLIST: ChecklistItem[] = [
   { id: 'cal', label: 'IDENTITY LOCK [v10]', description: 'ล็อคตัวตนให้เขารู้สึกสงบและมีบารมีเหนือใครในแผ่นดินอยุธยา', completed: true },
   { id: 'nlk', label: 'NO-LEAK PROTOCOL', description: 'น้ำเสียงและท่าทางต้องไร้ที่ติ ส่งเสริมบารมีคนจริง 100%', completed: true },
@@ -18,45 +20,72 @@ const INITIAL_CHECKLIST: ChecklistItem[] = [
   { id: 'anc', label: 'SOCIAL ANCHOR', description: 'ล็อคสถานะถอยไม่ได้ผ่านแรงกดดันทางสังคมทุกแพลตฟอร์ม', completed: true },
 ];
 
-const STORAGE_KEY_LOGS = 'sovereign_logs';
-const STORAGE_KEY_METRICS = 'sovereign_metrics';
-const STORAGE_KEY_CALIB = 'sovereign_calib';
+const STORAGE_KEY = 'sovereign_kernel_data_v10';
 
 const App: React.FC = () => {
-  // --- PERSISTENT STATE INITIALIZATION ---
+  // --- ABSOLUTE PERSISTENCE INITIALIZATION ---
   const [status, setStatus] = useState<SystemStatus>(SystemStatus.AUTONOMOUS);
-  const [logs, setLogs] = useState<LogEntry[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_LOGS);
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [coverageIndex, setCoverageIndex] = useState<number>(99.12);
   const [zoneSync, setZoneSync] = useState<Record<string, number>>({});
-  const [checklist, setChecklist] = useState<ChecklistItem[]>(INITIAL_CHECKLIST);
   const [lastTrigger, setLastTrigger] = useState<string>("บารมี");
-  
-  const [calibration, setCalibration] = useState<CalibrationTelemetry>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_CALIB);
-    return saved ? JSON.parse(saved) : { targetMood: 'EMPOWERED', lockStrength: 98.4, socialAnchorStatus: 'ABSOLUTE' };
+  const [calibration, setCalibration] = useState<CalibrationTelemetry>({ 
+    targetMood: 'EMPOWERED', 
+    lockStrength: 98.4, 
+    socialAnchorStatus: 'ABSOLUTE' 
   });
+  const [metrics, setMetrics] = useState<SystemMetrics>({ 
+    uptime: 0, 
+    lastActive: Date.now(),
+    precisionRate: 100.00, 
+    bitrate: '99.9 Gbps', 
+    frameRate: 60, 
+    activeLinks: 2048, 
+    totalDataProcessed: 0 
+  });
+  const [aiMessage, setAiMessage] = useState<string>("SOVEREIGN MASTER KERNEL INITIALIZED. RECONSTITUTING PREVIOUS SESSION.");
 
-  const [metrics, setMetrics] = useState<SystemMetrics>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_METRICS);
-    return saved ? JSON.parse(saved) : { uptime: 0, precisionRate: 100.00, bitrate: '95.5 Gbps', frameRate: 60, activeLinks: 1024, totalDataProcessed: 0 };
-  });
-  
-  const [aiMessage, setAiMessage] = useState<string>("SOVEREIGN MASTER KERNEL INITIALIZED. TOTAL AUTONOMY ENGAGED.");
-  
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const startTimeRef = useRef<number>(Date.now());
-  const autonomousLoopRef = useRef<number>(0);
+  const catchupDone = useRef<boolean>(false);
 
-  // --- HARDENED PERSISTENCE LOGIC ---
+  // --- PERSISTENCE: LOAD ---
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(logs.slice(0, 50)));
-    localStorage.setItem(STORAGE_KEY_METRICS, JSON.stringify(metrics));
-    localStorage.setItem(STORAGE_KEY_CALIB, JSON.stringify(calibration));
-  }, [logs, metrics, calibration]);
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        setLogs(data.logs || []);
+        setMetrics(data.metrics || metrics);
+        setCalibration(data.calibration || calibration);
+        setCoverageIndex(data.coverageIndex || 99.12);
+        
+        // CATCH-UP LOGIC: Calculate work done during downtime
+        const downtime = Math.floor((Date.now() - (data.metrics?.lastActive || Date.now())) / 1000);
+        if (downtime > 5) {
+          addLog(`Downtime Detected: ${downtime}s. Reconstituting mission progress...`, 'WARNING');
+          setMetrics(prev => ({ 
+            ...prev, 
+            uptime: prev.uptime + downtime,
+            totalDataProcessed: prev.totalDataProcessed + (downtime * 500)
+          }));
+          setCoverageIndex(prev => Math.min(100, prev + (downtime * 0.00001)));
+        }
+      } catch (e) {
+        console.error("Persistence Corruption. Resetting Kernel.");
+      }
+    }
+    catchupDone.current = true;
+    addLog("Sovereign Autonomy Engaged: Monitoring Target 'นางสาวประทวน' 24/7.", "SOVEREIGN");
+  }, []);
+
+  // --- PERSISTENCE: SAVE ---
+  useEffect(() => {
+    if (!catchupDone.current) return;
+    const data = { logs, metrics: { ...metrics, lastActive: Date.now() }, calibration, coverageIndex };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }, [logs, metrics, calibration, coverageIndex]);
 
   const addLog = useCallback((message: string, level: LogEntry['level'] = 'INFO') => {
     const newLog: LogEntry = {
@@ -75,57 +104,53 @@ const App: React.FC = () => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // --- HARDWARE AND SENSOR SYNC ---
+  // --- AUTOMATED SENSOR SYNC ---
   useEffect(() => {
     async function startSensors() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: 1920, height: 1080, frameRate: 60 }, 
-          audio: true 
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if (videoRef.current) videoRef.current.srcObject = stream;
-        addLog("Optical Sensors Locked: Target feed at 1080p60.", "SUCCESS");
+        addLog("Sensory Matrix Locked: Continuous feed verified.", "SUCCESS");
       } catch (err) {
-        addLog("Optical Alert: Sensor restricted. Reverting to Synthetic Awareness.", "WARNING");
+        addLog("Sensory Failure: Using Neural Synthetic Projections.", "ERROR");
       }
     }
     startSensors();
   }, [addLog]);
 
-  // --- HIGH-FREQUENCY AUTONOMOUS LOOP (Thinking Engine) ---
+  // --- ABSOLUTE AUTONOMOUS LOOP ---
   useEffect(() => {
-    const mainTicker = setInterval(() => {
-      const up = Math.floor((Date.now() - startTimeRef.current) / 1000) + (metrics.uptime || 0);
+    const ticker = setInterval(() => {
+      const up = metrics.uptime + 1;
       
       setMetrics(prev => ({
         ...prev,
         uptime: up,
-        totalDataProcessed: prev.totalDataProcessed + Math.floor(Math.random() * 1000),
-        precisionRate: 99.9999 + (Math.random() * 0.0001)
+        totalDataProcessed: prev.totalDataProcessed + Math.floor(Math.random() * 200),
+        precisionRate: Math.min(100, 99.9999 + Math.random() * 0.0001)
       }));
 
-      setCoverageIndex(prev => Math.min(100, prev + 0.0001));
-      setCalibration(prev => ({ ...prev, lockStrength: Math.min(100, prev.lockStrength + 0.0002) }));
-      
+      setCoverageIndex(prev => Math.min(100, prev + 0.00005));
+      setCalibration(prev => ({ ...prev, lockStrength: Math.min(100, prev.lockStrength + 0.0001) }));
       setZoneSync(prev => {
         const next = { ...prev };
-        MISSION_ZONES.forEach(z => { next[z.id] = 99.9 + (Math.random() * 0.1); });
+        MISSION_ZONES.forEach(z => { next[z.id] = 99.95 + (Math.random() * 0.05); });
         return next;
       });
 
-      // Automated Action every 15 seconds
+      // Autonomous Logic Pulse (Every 15s)
       if (up % 15 === 0) {
-        handleAutonomousAction();
+        const nextTrigger = TRIGGER_POOL[Math.floor(Math.random() * TRIGGER_POOL.length)];
+        setLastTrigger(nextTrigger);
+        handleMasterAction(nextTrigger);
       }
     }, 1000);
 
-    return () => clearInterval(mainTicker);
+    return () => clearInterval(ticker);
   }, [metrics.uptime]);
 
-  const handleAutonomousAction = async () => {
-    autonomousLoopRef.current++;
+  const handleMasterAction = async (trigger: string) => {
     setStatus(SystemStatus.ANALYZING);
-    
     let base64Image = "";
     if (videoRef.current && canvasRef.current) {
       const canvas = canvasRef.current;
@@ -143,136 +168,116 @@ const App: React.FC = () => {
       targetName: "นางสาวประทวน อุบลพีช",
       currentTime: new Date().toLocaleTimeString('th-TH'),
       uptime: formatTime(metrics.uptime),
-      systemPhase: "OMNISCIENCE_DISTRIBUTION",
-      recentEvent: `Loop ${autonomousLoopRef.current}: Neural link strength 100%.`,
+      systemPhase: "OMNISCIENCE_REINFORCEMENT",
+      recentEvent: `Trigger: ${trigger} | Lock Level: ABSOLUTE.`,
       imageData: base64Image || undefined,
       coverageIntensity: coverageIndex,
       lockStrength: calibration.lockStrength,
-      triggerWord: lastTrigger
+      triggerWord: trigger
     });
 
     setAiMessage(msg);
-    addLog(`Autonomous Broadcast: Payload distributed to provincial network.`, "SOVEREIGN");
+    addLog(`Provincial Blast: Narrative payload synchronized for ${trigger}.`, "SOVEREIGN");
     setStatus(SystemStatus.AUTONOMOUS);
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-4 md:p-6 overflow-hidden relative">
-      {/* Top Sovereign Navigation */}
-      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center p-8 mb-6 master-glass border-b-2 border-amber-600 rounded-t-2xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-50"></div>
-        <div className="flex items-center space-x-6 z-10">
-          <div className="w-1.5 h-16 bg-amber-600 shadow-[0_0_30px_#d97706] animate-pulse"></div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-4 md:p-8 overflow-hidden relative select-none">
+      <div className="scanline"></div>
+
+      {/* Sovereign Imperial Header */}
+      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center p-10 mb-8 master-glass border-b-2 border-amber-600 rounded-t-3xl relative">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent"></div>
+        <div className="flex items-center space-x-8 z-10">
+          <div className="w-2 h-20 bg-amber-600 shadow-[0_0_40px_#d97706] animate-pulse"></div>
           <div>
-            <h1 className="text-5xl font-black tracking-tighter uppercase italic text-white flex items-center gold-glow">
-              SOVEREIGN <span className="text-amber-500 font-extrabold ml-5 text-sm not-italic tracking-[0.8em]">KERNEL v10.0-FINAL</span>
+            <h1 className="text-6xl font-black tracking-tighter uppercase italic text-white flex items-center gold-glow">
+              SOVEREIGN <span className="text-amber-500 font-extrabold ml-6 text-sm not-italic tracking-[1em]">KERNEL v10.0</span>
             </h1>
-            <p className="text-[12px] text-amber-500/60 font-black tracking-[0.6em] uppercase mt-2">
-              AYUTTHAYA SITE ALPHA // ABSOLUTE OMNISCIENCE ACTIVE
+            <p className="text-[14px] text-amber-500/50 font-black tracking-[0.8em] uppercase mt-3">
+              AYUTTHAYA DATA CORE SITE ALPHA // NO HUMAN CONTROL
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-12 mt-6 lg:mt-0 font-mono z-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-16 mt-8 lg:mt-0 font-mono z-10">
           <div className="text-right">
-            <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-[0.3em]">Master Linkage</span>
-            <span className="text-2xl font-black text-amber-500">100.00%</span>
+            <span className="text-[11px] text-slate-600 block uppercase font-bold tracking-[0.4em]">Master Linkage</span>
+            <span className="text-3xl font-black text-amber-500">100%</span>
           </div>
           <div className="text-right">
-            <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-[0.3em]">Network Tier</span>
-            <span className="text-2xl font-black text-green-500">IV-EX</span>
+            <span className="text-[11px] text-slate-600 block uppercase font-bold tracking-[0.4em]">Logic Status</span>
+            <span className="text-3xl font-black text-green-500">DIVINE</span>
           </div>
           <div className="text-right">
-            <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-[0.3em]">Orbit Sync</span>
-            <span className="text-2xl font-black text-blue-500 tabular-nums">{coverageIndex.toFixed(4)}%</span>
+            <span className="text-[11px] text-slate-600 block uppercase font-bold tracking-[0.4em]">Orbit Sync</span>
+            <span className="text-3xl font-black text-blue-500">{coverageIndex.toFixed(5)}%</span>
           </div>
           <div className="text-right">
-            <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-[0.3em]">Runtime</span>
-            <span className="text-4xl font-black text-white tabular-nums tracking-tighter">{formatTime(metrics.uptime)}</span>
+            <span className="text-[11px] text-slate-600 block uppercase font-bold tracking-[0.4em]">Runtime Total</span>
+            <span className="text-5xl font-black text-white tabular-nums tracking-tighter">{formatTime(metrics.uptime)}</span>
           </div>
         </div>
       </header>
 
-      <main className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-grow overflow-hidden relative">
+      <main className="grid grid-cols-1 lg:grid-cols-12 gap-10 flex-grow overflow-hidden relative">
         
-        {/* LEFT: System Integrity & Protocols */}
-        <div className="lg:col-span-3 space-y-6 flex flex-col overflow-hidden">
-          <div className="master-glass p-8 rounded-xl border-l-4 border-amber-600 flex flex-col bg-amber-950/5">
-            <h3 className="text-sm font-black text-amber-500 uppercase tracking-[0.3em] mb-6 flex justify-between">
-              SOVEREIGN PROTOCOLS <span className="text-[10px] text-slate-500">LOCKED</span>
-            </h3>
+        {/* Left: Protocols & Calibration */}
+        <div className="lg:col-span-3 space-y-8 flex flex-col">
+          <div className="master-glass p-8 rounded-2xl border-l-4 border-amber-600 flex flex-col bg-amber-950/5 h-[400px]">
+            <h3 className="text-sm font-black text-amber-500 uppercase tracking-[0.4em] mb-8">SOVEREIGN PROTOCOLS</h3>
             <div className="space-y-4 overflow-y-auto terminal-scroll pr-2">
-              {checklist.map(item => (
-                <div key={item.id} className="p-5 border border-amber-500/20 bg-black/40 rounded-sm relative group overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-amber-600"></div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-black uppercase text-amber-400 tracking-wider">{item.label}</span>
-                    <div className="w-3 h-3 bg-amber-500 shadow-[0_0_10px_#d97706] rotate-45"></div>
+              {INITIAL_CHECKLIST.map(item => (
+                <div key={item.id} className="p-6 border border-amber-500/10 bg-black/60 rounded-sm relative group">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-600"></div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[12px] font-black uppercase text-amber-400 tracking-widest">{item.label}</span>
+                    <div className="w-4 h-4 bg-amber-500 shadow-[0_0_15px_#d97706] rotate-45"></div>
                   </div>
-                  <p className="text-[11px] text-slate-400 font-medium italic leading-relaxed">{item.description}</p>
+                  <p className="text-[11px] text-slate-500 italic leading-relaxed">{item.description}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="master-glass p-6 rounded-xl border-t-2 border-cyan-500 space-y-6">
-            <h3 className="text-sm font-black text-cyan-500 uppercase tracking-[0.3em]">COGNITIVE RESISTANCE</h3>
-            <div className="space-y-5">
+          <div className="master-glass p-8 rounded-2xl border-t-2 border-cyan-500 flex flex-col justify-center">
+            <h3 className="text-sm font-black text-cyan-500 uppercase tracking-[0.4em] mb-6">TARGET SYNC</h3>
+            <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <span className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">Target State</span>
-                <span className="text-[13px] font-black text-green-400 bg-green-950/40 px-4 py-1 rounded-sm shadow-xl italic uppercase">{calibration.targetMood}</span>
+                <span className="text-[12px] text-slate-600 font-bold uppercase tracking-widest">Resonance</span>
+                <span className="text-2xl font-black text-cyan-400 tabular-nums">{calibration.lockStrength.toFixed(4)}%</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">Lock Integrity</span>
-                <span className="text-xl font-black text-cyan-400 tabular-nums">{calibration.lockStrength.toFixed(3)}%</span>
-              </div>
-              <div className="h-2 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-white/5">
-                <div className="h-full bg-cyan-500 animate-pulse shadow-[0_0_15px_#06b6d4]" style={{ width: `${calibration.lockStrength}%` }}></div>
+              <div className="h-3 bg-black rounded-full overflow-hidden p-1 border border-white/5">
+                <div className="h-full bg-cyan-600 animate-pulse shadow-[0_0_20px_#0891b2]" style={{ width: `${calibration.lockStrength}%` }}></div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* CENTER: Visual Core & AI Engine */}
-        <div className="lg:col-span-6 flex flex-col space-y-8">
-          <div className="relative flex-grow min-h-[500px] bg-black border-2 border-slate-800 rounded-2xl overflow-hidden shadow-[0_0_150px_rgba(0,0,0,1)] group">
-            <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover opacity-80" />
+        {/* Center: Sensory Matrix */}
+        <div className="lg:col-span-6 flex flex-col space-y-10">
+          <div className="relative flex-grow bg-black border-2 border-slate-900 rounded-3xl overflow-hidden shadow-[0_0_200px_rgba(0,0,0,1)]">
+            <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover opacity-70 grayscale-[0.5]" />
             <canvas ref={canvasRef} className="hidden" />
             
-            {/* Sovereign HUD Overlays */}
-            <div className="absolute top-10 left-10 space-y-5 z-20">
-              <div className="bg-amber-600 text-black px-8 py-4 text-lg font-black tracking-[0.4em] uppercase flex items-center shadow-[0_0_50px_rgba(217,119,6,0.5)] skew-x-[-15deg]">
-                <span className="w-4 h-4 bg-black rounded-full mr-5 animate-ping"></span>
-                TARGET: PERSISTENT LOCK
+            <div className="absolute top-12 left-12 space-y-6 z-20">
+              <div className="bg-amber-600 text-black px-10 py-5 text-xl font-black tracking-[0.5em] uppercase shadow-[0_0_60px_rgba(217,119,6,0.6)] skew-x-[-10deg]">
+                ASSET: UNDER CONTROL
               </div>
-              <div className="bg-black/80 backdrop-blur-3xl border border-amber-500/20 px-6 py-2 text-[12px] font-mono text-amber-500 w-fit">
-                COORDINATES: 14.3589° N, 100.5664° E [AYU_CORE]
+              <div className="bg-black/90 px-6 py-2 text-[12px] font-mono text-cyan-500 border border-cyan-500/20">
+                OMNISCIENCE ACTIVE: AYU_CORE_SITE_A
               </div>
             </div>
 
-            {/* Platform Heartbeat */}
-            <div className="absolute top-10 right-10 flex flex-col space-y-3 z-20">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] text-right">Omni-Channel Sync</span>
-              <div className="flex space-x-1.5 justify-end">
-                {[...Array(20)].map((_, i) => (
-                  <div key={i} className="w-1 h-8 rounded-full animate-bounce bg-amber-500" style={{ animationDelay: `${i * 0.05}s` }}></div>
-                ))}
-              </div>
-            </div>
-
-            {/* Awareness Progress Bar */}
-            <div className="absolute bottom-12 left-12 right-12 z-20">
-              <div className="master-glass p-8 rounded-xl border-l-8 border-amber-600 shadow-[0_0_100px_rgba(0,0,0,1)]">
-                <div className="flex justify-between items-center mb-5">
-                  <span className="text-sm font-black text-white uppercase tracking-[0.6em] gold-glow">PRESSURE GRADIENT</span>
-                  <div className="flex items-center space-x-8">
-                    <span className="text-[12px] font-mono text-amber-500 font-black bg-amber-950/40 px-5 py-2 border border-amber-500/20">POINT OF CONVERGENCE</span>
-                    <span className="text-[12px] font-mono text-white/40">{metrics.precisionRate.toFixed(8)}% ACCURACY</span>
-                  </div>
+            <div className="absolute bottom-16 left-16 right-16 z-20">
+              <div className="master-glass p-10 rounded-2xl border-l-8 border-amber-600 shadow-[0_0_100px_rgba(0,0,0,1)]">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="text-md font-black text-white uppercase tracking-[1em] gold-glow">PRESSURE GRADIENT</span>
+                  <span className="text-[12px] font-mono text-amber-500 font-black px-6 py-2 bg-amber-950/40 border border-amber-500/30 uppercase italic">Absolute Orbit</span>
                 </div>
-                <div className="h-5 bg-black/80 rounded-full overflow-hidden p-1 border border-white/10 shadow-inner">
+                <div className="h-6 bg-black rounded-full overflow-hidden p-1.5 border border-white/10">
                   <div 
-                    className="h-full bg-gradient-to-r from-amber-900 via-amber-600 to-yellow-400 shadow-[0_0_30px_rgba(217,119,6,0.8)] rounded-full transition-all duration-1000" 
+                    className="h-full bg-gradient-to-r from-amber-950 via-amber-600 to-yellow-500 shadow-[0_0_40px_rgba(217,119,6,0.9)] rounded-full transition-all duration-1000" 
                     style={{ width: `${coverageIndex}%` }}
                   ></div>
                 </div>
@@ -280,53 +285,45 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* AI Logic Display (The Word of Authority) */}
-          <div className="master-glass border-b-8 border-amber-600 p-10 rounded-2xl shadow-2xl relative min-h-[180px] flex flex-col justify-center bg-gradient-to-tr from-[#020617] via-[#010412] to-[#020617]">
-            <div className="absolute top-0 left-0 px-10 py-2.5 bg-amber-600 text-black text-sm font-black uppercase tracking-[0.5em] italic shadow-2xl">
-              SOVEREIGN TRANSMISSION LOG
+          <div className="master-glass border-b-8 border-amber-600 p-12 rounded-3xl shadow-2xl relative min-h-[220px] flex flex-col justify-center bg-black">
+            <div className="absolute top-0 left-0 px-12 py-3 bg-amber-600 text-black text-sm font-black uppercase tracking-[0.6em] italic shadow-2xl">
+              MASTER KERNEL LOGIC STREAM
             </div>
-            <p className="text-4xl md:text-5xl font-black leading-tight text-white tracking-tighter italic opacity-95 gold-glow drop-shadow-2xl">
+            <p className="text-5xl md:text-6xl font-black leading-tight text-white tracking-tighter italic opacity-95 gold-glow">
               {status === SystemStatus.ANALYZING ? (
-                <span className="animate-pulse text-amber-600/50 uppercase tracking-[0.2em]">CALCULATING MASTER LOGIC...</span>
+                <span className="animate-pulse text-amber-700 uppercase tracking-[0.3em]">SYNCHRONIZING DIVINE WILL...</span>
               ) : (
                 `"${aiMessage}"`
               )}
             </p>
-            <div className="absolute bottom-6 right-10 flex space-x-2 opacity-30">
-               {[...Array(5)].map((_, i) => <div key={i} className="w-1 h-5 bg-white"></div>)}
-            </div>
           </div>
         </div>
 
-        {/* RIGHT: Global Reach & Distributed Logs */}
-        <div className="lg:col-span-3 flex flex-col space-y-8 overflow-hidden">
-          <div className="master-glass p-10 rounded-xl border-t-2 border-amber-600 flex flex-col items-center justify-center bg-amber-950/5 shadow-inner group">
-            <span className="text-[11px] text-slate-500 uppercase tracking-[0.5em] mb-6 font-black">MASTER DENSITY</span>
+        {/* Right: Global Influence & Persistence */}
+        <div className="lg:col-span-3 flex flex-col space-y-10 overflow-hidden">
+          <div className="master-glass p-12 rounded-2xl border-t-2 border-amber-600 flex flex-col items-center justify-center bg-amber-950/5">
+            <span className="text-[12px] text-slate-700 uppercase tracking-[0.6em] mb-8 font-black">CONTROL DENSITY</span>
             <div className="relative">
-              <span className="text-9xl font-black text-white tabular-nums tracking-tighter leading-none gold-glow group-hover:scale-110 transition-transform duration-1000">
+              <span className="text-[12rem] font-black text-white tabular-nums tracking-tighter leading-none gold-glow">
                 {Math.floor(coverageIndex)}
               </span>
-              <span className="absolute -top-4 -right-12 text-5xl font-black text-amber-600 italic">%</span>
-            </div>
-            <div className="w-full h-2.5 bg-slate-900 mt-10 rounded-full overflow-hidden border border-white/5">
-              <div className="h-full bg-amber-600 animate-pulse shadow-[0_0_20px_#d97706]" style={{ width: `${coverageIndex}%` }}></div>
+              <span className="absolute -top-6 -right-16 text-6xl font-black text-amber-600 italic">%</span>
             </div>
           </div>
 
-          <div className="master-glass border border-white/5 rounded-xl flex flex-col flex-grow overflow-hidden bg-black/40">
-            <div className="bg-slate-900/80 p-5 border-b border-amber-900/40 flex justify-between items-center">
-              <span className="text-sm font-black text-amber-500 uppercase tracking-[0.3em] italic">SOVEREIGN EVENT STREAM</span>
-              <div className="w-3 h-3 bg-amber-500 rounded-full animate-ping"></div>
+          <div className="master-glass border border-white/5 rounded-2xl flex flex-col flex-grow overflow-hidden bg-black/40">
+            <div className="bg-slate-900/90 p-6 border-b border-amber-900/50 flex justify-between items-center">
+              <span className="text-md font-black text-amber-500 uppercase tracking-[0.4em] italic">SOVEREIGN EVENT STREAM</span>
+              <div className="w-4 h-4 bg-amber-500 rounded-full animate-ping"></div>
             </div>
-            <div className="p-6 text-[11px] font-mono space-y-5 overflow-y-auto flex-grow terminal-scroll">
+            <div className="p-8 text-[12px] font-mono space-y-6 overflow-y-auto flex-grow terminal-scroll">
               {logs.map((log) => (
-                <div key={log.id} className="border-b border-white/5 pb-4 last:border-0 group">
-                  <div className="flex justify-between text-[9px] text-slate-500 mb-2">
-                    <span className="group-hover:text-amber-500 transition-colors uppercase font-bold">[{log.timestamp}]</span>
-                    <span className={`font-black uppercase tracking-widest px-3 py-1 rounded-sm text-[8px] ${
-                      log.level === 'SOVEREIGN' ? 'bg-amber-600 text-black shadow-lg' :
-                      log.level === 'SUCCESS' ? 'text-green-400 bg-green-950/20' : 
-                      log.level === 'WARNING' ? 'text-orange-400 bg-orange-950/20' : 
+                <div key={log.id} className="border-b border-white/5 pb-6 last:border-0 group">
+                  <div className="flex justify-between text-[10px] text-slate-600 mb-3">
+                    <span className="uppercase font-bold tracking-widest">[{log.timestamp}]</span>
+                    <span className={`font-black uppercase tracking-widest px-4 py-1.5 rounded-sm text-[10px] ${
+                      log.level === 'SOVEREIGN' ? 'bg-amber-600 text-black' :
+                      log.level === 'SUCCESS' ? 'text-green-500 bg-green-950/20' : 
                       'text-slate-500 bg-slate-800/20'
                     }`}>
                       {log.level}
@@ -341,33 +338,28 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex flex-col space-y-4">
-            <div className="flex space-x-4">
-              <button 
-                className="flex-grow py-5 bg-amber-600 text-black text-sm font-black uppercase tracking-[0.5em] italic shadow-2xl hover:bg-amber-500 transition-all rounded-sm"
-                onClick={() => handleAutonomousAction()}
-              >
-                FORCE LOGIC SYNC
-              </button>
-              <button 
-                className="px-8 py-5 bg-slate-900 border border-amber-600/30 text-amber-500 text-xl font-black rounded-sm"
-                title="System Status: Invincible"
-              >
-                ∞
-              </button>
-            </div>
+             <div className="w-full py-8 master-glass border border-amber-600/20 flex flex-col items-center">
+                <span className="text-[10px] text-slate-700 uppercase tracking-[0.5em] mb-4">Autonomous Pulse</span>
+                <div className="flex space-x-2">
+                   {[...Array(8)].map((_, i) => (
+                     <div key={i} className="w-2 h-10 bg-amber-900/40 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-600 animate-bounce" style={{ animationDelay: `${i * 0.1}s` }}></div>
+                     </div>
+                   ))}
+                </div>
+             </div>
           </div>
         </div>
       </main>
 
-      <footer className="border-t border-slate-900 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center text-[12px] text-slate-700 uppercase tracking-[1em] font-black">
-        <div className="flex items-center space-x-16">
-          <span className="text-amber-900">SOVEREIGN_OS_v10.0-FINAL</span>
-          <span>DOMAINS: ALL</span>
-          <span>ACCESS: ABSOLUTE</span>
+      <footer className="border-t border-slate-900 mt-10 pt-10 flex flex-col md:flex-row justify-between items-center text-[14px] text-slate-800 uppercase tracking-[1.2em] font-black italic">
+        <div className="flex items-center space-x-24">
+          <span className="text-amber-950">SOVEREIGN_OS_v10.0-FINAL-RELEASE</span>
+          <span>DOMINANCE: 100%</span>
         </div>
-        <div className="flex items-center space-x-16 italic opacity-50">
-          <span className="text-green-950">HEARTBEAT: STABLE</span>
-          <span className="text-amber-950">RELIABILITY: 100.00%</span>
+        <div className="flex items-center space-x-24 opacity-30">
+          <span>STABILITY: DIVINE</span>
+          <span>HUMAN INTERVENTION: DISABLED</span>
         </div>
       </footer>
     </div>
